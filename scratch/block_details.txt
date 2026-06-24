@@ -1,0 +1,19 @@
+Found 6 blocks raw in overview.txt
+Block 0: 4769 characters, path=d:\Vibecoding\TradePilot\scratch\block_0.gs
+  Snippet: '))\""","Cwd":""d:\\Vibecoding\\TradePilot"","SafeToAutoRun":"true","WaitMsBeforeAsync":"0"}}]} {"step_index":243,"sourc
+--------------------------------------------------------------------------------
+Block 1: 4481 characters, path=d:\Vibecoding\TradePilot\scratch\block_1.gs
+  Snippet:  /**  * TradePilot - Stock Data Management System (v4.0 - 整合條件式欄位更新)  */  const CONFIG = {   SHEETS: {     DB: 'stock_db
+--------------------------------------------------------------------------------
+Block 2: 548 characters, path=d:\Vibecoding\TradePilot\scratch\block_2.gs
+  Snippet:  /**  * 修改選單：加入「匯入股票 CSV」項目  */ function onOpen() {   const ui = SpreadsheetApp.getUi();   ui.createMenu('📈 TradePilot')
+--------------------------------------------------------------------------------
+Block 3: 3870 characters, path=d:\Vibecoding\TradePilot\scratch\block_3.gs
+  Snippet:  /**  * TradePilot - Stock Data Management System (v4.2 - 完整整合版)  * 整合規則：  * 1. 兩批資料輪替 (Prev <- Curr)  * 2. 條件更新：CSV N -
+--------------------------------------------------------------------------------
+Block 4: 1404 characters, path=d:\Vibecoding\TradePilot\scratch\block_4.gs
+  Snippet:  /**  * TradePilot - Stock Data Management System (v4.3)  * 更新規則：  * 1. 兩批資料自動輪替 (Prev <- Curr)  * 2. 條件更新：CSV N -> BD (
+--------------------------------------------------------------------------------
+Block 5: 2695 characters, path=d:\Vibecoding\TradePilot\scratch\block_5.gs
+  Snippet:  /**  * TradePilot - Stock Data Management System (v4.5)  * [完整整合版] 包含：初始化、選單、上傳、輪替、與 N->BD / O->BE 條件更新邏輯  */  const CO
+--------------------------------------------------------------------------------
