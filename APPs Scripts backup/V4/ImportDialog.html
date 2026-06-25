@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+</head>
+
+<body style="font-family: system-ui, -apple-system, sans-serif; padding: 15px; background: #fff;">
+  <h3 style="margin-top: 0; color: #1a73e8; font-weight: 500;">同步匯入股票 CSV</h3>
+  <p id="status-text" style="font-size: 13px; color: #5f6368; margin-bottom: 20px; line-height: 1.4;">
+    請選擇 CSV 檔案匯入：
+  </p>
+
+  <div id="file-box">
+    <input type="file" id="file-input" style="font-size: 13px;" onchange="startImport(this)">
+  </div>
+
+  <script>
+    function startImport(input) {
+      var file = input.files[0];
+      if (!file) return;
+
+      var textEl = document.getElementById("status-text");
+      var boxEl = document.getElementById("file-box");
+
+      textEl.innerHTML = "⌛ 正在讀取並同步 CSV 資料，請稍候...";
+      boxEl.style.display = "none";
+
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        google.script.run
+          .withSuccessHandler(function (res) {
+            if (res && res.success) {
+              alert("CSV 匯入完成");
+              google.script.host.close();
+            } else {
+              var errMsg = (res && res.error) ? res.error : "未知錯誤";
+              alert("匯入失敗：\n" + errMsg);
+              textEl.innerHTML = "❌ 匯入失敗，請重新選擇檔案重試：";
+              boxEl.style.display = "block";
+              input.value = "";
+            }
+          })
+          .withFailureHandler(function (err) {
+            alert("伺服器連線錯誤：\n" + err);
+            textEl.innerHTML = "❌ 連線錯誤，請重新選擇檔案重試：";
+            boxEl.style.display = "block";
+            input.value = "";
+          })
+          .importStockCSV(e.target.result);
+      };
+
+      reader.readAsText(file, "Big5");
+    }
+  </script>
+</body>
+
+</html>

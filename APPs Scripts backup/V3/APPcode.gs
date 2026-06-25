@@ -118,18 +118,7 @@ function getDatabaseBackupPayload() {
     const sheet = ss.getSheetByName(sheetName);
     if (!sheet) return;
 
-    let values = sheet.getDataRange().getValues();
-    
-    // 遍歷並固定日期欄位格式
-    values = values.map(function(row) {
-      return row.map(function(cell) {
-        if (cell instanceof Date) {
-          return Utilities.formatDate(cell, ss.getSpreadsheetTimeZone(), 'yyyy/MM/dd');
-        }
-        return cell;
-      });
-    });
-
+    const values = sheet.getDataRange().getValues();
     const rowCount = values.length;
     const colCount = rowCount > 0 ? values[0].length : 0;
 
@@ -208,39 +197,8 @@ function importDatabaseJson(jsonText) {
 
       sheet.clear();
 
-      let values = sheetData.values;
+      const values = sheetData.values;
       if (values.length > 0 && values[0].length > 0) {
-        
-        // 欄位級別的日期還原
-        if (sheetName === CONFIG.SHEETS.DB) {
-          const headers = values[0].map(function(h) { return String(h).trim(); });
-          const buyObsIdx = headers.indexOf('買進觀察日期');
-          const sellObsIdx = headers.indexOf('賣出觀察日期');
-          
-          values = values.map(function(row, rIdx) {
-            if (rIdx === 0) return row; // 跳過標頭列
-            const newRow = row.slice();
-            [buyObsIdx, sellObsIdx].forEach(function(idx) {
-              if (idx >= 0 && newRow[idx]) {
-                const parsedDate = _parseDateString(newRow[idx]);
-                if (parsedDate) newRow[idx] = parsedDate;
-              }
-            });
-            return newRow;
-          });
-          
-        } else if (sheetName === CONFIG.SHEETS.META) {
-          values = values.map(function(row, rIdx) {
-            if (rIdx === 0) return row;
-            const newRow = row.slice();
-            if (newRow[1]) {
-              const parsedDate = _parseDateString(newRow[1]);
-              if (parsedDate) newRow[1] = parsedDate;
-            }
-            return newRow;
-          });
-        }
-
         sheet.getRange(1, 1, values.length, values[0].length).setValues(values);
       }
     });

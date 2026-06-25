@@ -1,0 +1,17 @@
+V1 穩定版
+V2 拆分版,初步測試OK
+V3 兩個修正都已完成，驗收結果：
+
+修正 1 — 移除重複 helper
+
+ZoneEngine.gs 從原本 670 行縮減到 521 行
+開頭直接從 function updateBuyZoneStatus 開始，沒有任何 helper 定義
+Core.gs 為唯一來源，GAS runtime 合併後不會再有後定義覆蓋問題
+修正 2 — 量能閾值改讀 settings
+
+在 updateBuyZoneStatus 函數體第一段（L12-22）讀取 settings 表
+_toSetting(key, fallback) 負責型別轉換與 fallback，讀不到時維持原值（1.5 / 1.0 / 0.6）
+量能判定邏輯改用 volBurstMult / volIncDecMult / volDecMult，行為與原版完全相同
+settings 工作表若不存在（如新環境）也安全，會退回 fallback
+
+V4 修正資料庫匯入問題並準備部署

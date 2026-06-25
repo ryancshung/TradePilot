@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+</head>
+
+<body style="font-family: system-ui, -apple-system, sans-serif; padding: 16px; background: #fff; color: #202124;">
+  <h3 style="margin: 0 0 10px; color: #1a73e8; font-weight: 500;">下載資料庫 JSON</h3>
+
+  <p id="status-text" style="font-size: 13px; color: #5f6368; margin: 0 0 18px; line-height: 1.5;">
+    下載目前整個資料庫備份檔，包含 stock_db、settings、meta、import_log。
+  </p>
+
+  <div style="display: flex; gap: 10px;">
+    <button id="download-btn" onclick="startDownload()"
+      style="border: 0; background: #1a73e8; color: #fff; padding: 9px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;">
+      下載 JSON
+    </button>
+
+    <button onclick="google.script.host.close()"
+      style="border: 1px solid #dadce0; background: #fff; color: #3c4043; padding: 9px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;">
+      關閉
+    </button>
+  </div>
+
+  <script>
+    function startDownload() {
+      var btn = document.getElementById('download-btn');
+      var textEl = document.getElementById('status-text');
+
+      btn.disabled = true;
+      btn.style.opacity = '0.7';
+      btn.textContent = '產生中...';
+      textEl.innerHTML = '⌛ 正在產生資料庫備份 JSON，請稍候...';
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          try {
+            if (!res || !res.fileName || !res.content) {
+              throw new Error('備份資料格式錯誤');
+            }
+
+            var blob = new Blob([res.content], { type: 'application/json;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = res.fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            textEl.innerHTML = '✅ JSON 備份已產生並開始下載。';
+            btn.textContent = '已下載';
+          } catch (err) {
+            alert('下載失敗：\n' + err);
+            btn.disabled = false;
+            btn.style.opacity = '1';
+            btn.textContent = '下載 JSON';
+            textEl.innerHTML = '❌ 下載失敗，請重試。';
+          }
+        })
+        .withFailureHandler(function (err) {
+          alert('伺服器連線錯誤：\n' + err);
+          btn.disabled = false;
+          btn.style.opacity = '1';
+          btn.textContent = '下載 JSON';
+          textEl.innerHTML = '❌ 連線錯誤，請稍後再試。';
+        })
+        .getDatabaseBackupPayload();
+    }
+  </script>
+</body>
+
+</html>

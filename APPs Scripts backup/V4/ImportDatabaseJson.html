@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+</head>
+
+<body style="font-family: system-ui, -apple-system, sans-serif; padding: 16px; background: #fff; color: #202124;">
+  <h3 style="margin: 0 0 10px; color: #1a73e8; font-weight: 500;">匯入資料庫 JSON</h3>
+
+  <p id="status-text" style="font-size: 13px; color: #5f6368; margin: 0 0 18px; line-height: 1.5;">
+    請選擇先前匯出的 JSON 備份檔，匯入後會覆蓋目前資料庫內容。
+  </p>
+
+  <div id="file-box">
+    <input type="file" id="file-input" accept=".json,application/json" style="font-size: 13px;"
+      onchange="startImport(this)">
+  </div>
+
+  <script>
+    function startImport(input) {
+      var file = input.files[0];
+      if (!file) return;
+
+      var textEl = document.getElementById('status-text');
+      var boxEl = document.getElementById('file-box');
+
+      textEl.innerHTML = '⌛ 正在讀取並匯入 JSON 資料庫，請稍候...';
+      boxEl.style.display = 'none';
+
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        google.script.run
+          .withSuccessHandler(function (res) {
+            if (res && res.success) {
+              var msg = 'JSON 匯入完成';
+              if (res.meta && res.meta.sourceAppVersion) {
+                msg += '\n來源版本：' + res.meta.sourceAppVersion;
+              }
+              if (res.meta && res.meta.schemaVersion) {
+                msg += '\nSchema：' + res.meta.schemaVersion;
+              }
+              alert(msg);
+              google.script.host.close();
+            } else {
+              var errMsg = (res && res.error) ? res.error : '未知錯誤';
+              alert('匯入失敗：\n' + errMsg);
+              textEl.innerHTML = '❌ 匯入失敗，請重新選擇 JSON 檔重試：';
+              boxEl.style.display = 'block';
+              input.value = '';
+            }
+          })
+          .withFailureHandler(function (err) {
+            alert('伺服器連線錯誤：\n' + err);
+            textEl.innerHTML = '❌ 連線錯誤，請重新選擇 JSON 檔重試：';
+            boxEl.style.display = 'block';
+            input.value = '';
+          })
+          .importDatabaseJson(e.target.result);
+      };
+
+      reader.readAsText(file, 'utf-8');
+    }
+  </script>
+</body>
+
+</html>
