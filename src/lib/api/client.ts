@@ -266,7 +266,15 @@ class MockApiClientImpl implements ApiClient {
   }
 
   async getStocks(): Promise<StockData[]> {
-    return this.getStorageItem<StockData[]>(STORAGE_KEYS.STOCKS, INITIAL_STOCKS);
+    const stocks = this.getStorageItem<StockData[]>(STORAGE_KEYS.STOCKS, INITIAL_STOCKS);
+    // 合併 ui_extensions，讓 tags/notes 在備份還原後依然存在
+    const ext = this.getStorageItem<UiExtensions>(STORAGE_KEYS.EXTENSIONS, {});
+    if (Object.keys(ext).length === 0) return stocks;
+    return stocks.map(s => ({
+      ...s,
+      tags: ext[s.id]?.tags ?? s.tags,
+      notes: ext[s.id]?.notes ?? s.notes,
+    }));
   }
 
   async getStockById(id: string): Promise<StockData | null> {
@@ -280,8 +288,24 @@ class MockApiClientImpl implements ApiClient {
     if (idx === -1) throw new Error('找不到該股票資料');
 
     const updatedStock = { ...stocks[idx], ...update };
-    stocks[idx] = updatedStock;
-    this.setStorageItem(STORAGE_KEYS.STOCKS, stocks);
+    // 核心欄位寫回 tradepilot_stocks（不含 tags/notes）
+    const coreStocks = stocks.map((s, i) => {
+      if (i !== idx) return s;
+      const { tags: _t, notes: _n, ...core } = updatedStock;
+      return core as StockData;
+    });
+    this.setStorageItem(STORAGE_KEYS.STOCKS, coreStocks);
+
+    // tags/notes 單獨同步到 tradepilot_ui_extensions
+    if ('tags' in update || 'notes' in update) {
+      const ext = this.getStorageItem<UiExtensions>(STORAGE_KEYS.EXTENSIONS, {});
+      ext[id] = {
+        tags: updatedStock.tags ?? [],
+        notes: updatedStock.notes ?? '',
+      };
+      this.setStorageItem(STORAGE_KEYS.EXTENSIONS, ext);
+    }
+
     return updatedStock;
   }
 
@@ -296,9 +320,9 @@ class MockApiClientImpl implements ApiClient {
   async updateSettings(settings: SystemSettings): Promise<SystemSettings> {
     this.setStorageItem(STORAGE_KEYS.SETTINGS, settings);
 
-    // 當系統設定被修改時，同步重新計算各股的買入/賣出上下緣以模擬真實後端邏輯
-    const stocks = await this.getStocks();
-    const updatedStocks = stocks.map(stock => {
+    // 從 raw 儲存讀核心欄位（不展開 ui_extensions），剛好被修改的部分
+    const rawStocks = this.getStorageItem<StockData[]>(STORAGE_KEYS.STOCKS, INITIAL_STOCKS);
+    const updatedStocks = rawStocks.map(stock => {
       const lowVal = stock.low || 0;
       const highVal = stock.high || 0;
       return {
@@ -318,29 +342,18 @@ class MockApiClientImpl implements ApiClient {
     return this.getStorageItem<ImportLog[]>(STORAGE_KEYS.LOGS, INITIAL_LOGS);
   }
 
-  async importCsv(_csvContent: string): Promise<{ success: boolean; deletedIds: string[] }> {
-    // 模擬 CSV 匯入邏輯
+  async importCsv(csvContent: string): Promise<{ success: boolean; deletedIds: string[] }> {
+    // 前端無法執行 CSV 欄位解析（需要 GAS Utilities.parseCsv + Sheets API）
+    // 只記錄操作日誌，不更新任何股票資料
     try {
       const logs = await this.getImportLogs();
-      const meta = await this.getSystemMeta();
-
+      const sizeKB = (new TextEncoder().encode(csvContent).byteLength / 1024).toFixed(1);
       const newLog: ImportLog = {
         timestamp: new Date().toISOString(),
-        status: '成功',
-        message: 'CSV 同步匯入成功 (Mock：已更新股票價格並重新計算買賣狀態)',
+        status: '待處理',
+        message: `前端已接收 CSV（${sizeKB} KB）。實際欄位解析與資料更新需至 Google Sheets 執行 Apps Script「手動匯入 CSV」。`,
       };
-
       this.setStorageItem(STORAGE_KEYS.LOGS, [newLog, ...logs]);
-
-      const updatedMeta: SystemMeta = {
-        ...meta,
-        tradeDate: '2026/06/23',
-        nextTradeDate: '2026/06/24',
-        obsDate: '2026/06/24',
-        lastUpdated: new Date().toISOString(),
-      };
-      this.setStorageItem(STORAGE_KEYS.META, updatedMeta);
-
       return { success: true, deletedIds: [] };
     } catch (_e) {
       return { success: false, deletedIds: [] };
@@ -358,17 +371,18 @@ class MockApiClientImpl implements ApiClient {
       }
       const payload: BackupPayload = result.payload;
 
-      // 2. 繼承既有 ui_extensions（tags/notes），不強依賴
-      const existingExt = this.getStorageItem<UiExtensions>(STORAGE_KEYS.EXTENSIONS, {});
-
-      // 3. 還原 stock_db → StockData[]
+      // 3. 還原 stock_db → StockData[]（核心欄位），tags/notes 維持走 ui_extensions
       const stockSheet = getSheetFromPayload(payload, 'stock_db');
       if (isValidSheetData(stockSheet)) {
         const stockRows: StockRow[] = sheetValuesToStockRows(stockSheet.values);
-        const stocks: StockData[] = stockRows.map(row =>
-          stockRowToStockData(row, existingExt[row.stock.identity.id])
-        );
-        this.setStorageItem(STORAGE_KEYS.STOCKS, stocks);
+        // 存入 tradepilot_stocks 時去掉 tags/notes，保持核心儲存乾淨
+        const coreStocks: StockData[] = stockRows.map(row => {
+          const full = stockRowToStockData(row);
+          const { tags: _t, notes: _n, ...core } = full;
+          return core as StockData;
+        });
+        this.setStorageItem(STORAGE_KEYS.STOCKS, coreStocks);
+        // 如果有既有 ext，保留不動；若這次備份股票 id 有變化，ext 裡舊的也不清除（安全）
       }
 
       // 4. 還原 settings → SystemSettings

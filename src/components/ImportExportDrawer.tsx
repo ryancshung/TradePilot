@@ -78,12 +78,13 @@ export default function ImportExportDrawer({ isOpen, onClose, onSuccess }: Impor
 
     setIsProcessing(true);
     const reader = new FileReader();
-    reader.onload = async () => {
+    reader.onload = async (event) => {
       try {
-        // 在 mock api 中模擬 CSV 處理
-        const res = await api.importCsv('');
+        const text = event.target?.result as string;
+        // 傳真實 CSV 內容給 mock client（mock 只記錄日誌，不實際解析欄位）
+        const res = await api.importCsv(text);
         if (res.success) {
-          alert('CSV 同步完成 (交易日與觀察日已更新)！');
+          alert('CSV 已記錄。注意：前端 Mock 模式不會實際解析 CSV 欄位，請至 Google Sheets 執行 Apps Script 進行真正同步。');
           onSuccess();
           loadLogs();
         }
@@ -94,7 +95,7 @@ export default function ImportExportDrawer({ isOpen, onClose, onSuccess }: Impor
         if (e.target) e.target.value = '';
       }
     };
-    // 依據 spec 大多為 Big5 CSV，模擬讀取
+    // 嘗試 UTF-8 讀取，大多數現代匯出為 UTF-8；若出現亂碼請轉檔後重試
     reader.readAsText(file, 'utf-8');
   };
 
@@ -182,7 +183,7 @@ export default function ImportExportDrawer({ isOpen, onClose, onSuccess }: Impor
               </div>
 
               <div className="text-xs text-amber-500 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
-                ⚠️ 注意：此為 Mock 互動，匯入 CSV 後會模擬將交易日更新至 2026/06/23 並重新渲染股票列表。
+                ⚠️ 注意：前端 Mock 模式無法執行 CSV 欄位解析（需要 GAS 的 Utilities.parseCsv 及 Sheets API）。選擇 CSV 後系統會記錄一筆操作日誌，但不會更新股票資料。如需真正同步，請至 Google Sheets 使用「手動匯入 CSV」選單。
               </div>
             </div>
           )}
@@ -257,7 +258,11 @@ export default function ImportExportDrawer({ isOpen, onClose, onSuccess }: Impor
                       className="text-xs p-3 rounded-lg bg-slate-50 dark:bg-slate-950 border border-slate-200/50 dark:border-slate-800/50 flex flex-col gap-1"
                     >
                       <div className="flex items-center justify-between">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${log.status === '成功' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          log.status === '成功' ? 'bg-emerald-500/10 text-emerald-500' :
+                          log.status === '待處理' ? 'bg-amber-500/10 text-amber-500' :
+                          'bg-red-500/10 text-red-500'
+                        }`}>
                           {log.status}
                         </span>
                         <span className="text-[10px] text-slate-400 font-mono">
