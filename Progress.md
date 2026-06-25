@@ -73,11 +73,10 @@
 | `importCsv()` | 不更新（前端限制） | 不動 |
 | `resetDatabase()` | 清除 | **不清除**（保留使用者筆記） |
 
-#### CSV 匯入說明（重要限制）
+#### CSV 匯入說明（目前保留項，非未完成核心功能）
 
-前端 mock 模式**無法**執行 CSV 欄位解析（需要 GAS `Utilities.parseCsv` 及 Sheets API）。
-選擇 CSV 後系統只記錄一筆「待處理」日誌，不更新股票資料。
-如需真正同步，請至 Google Sheets 使用「手動匯入 CSV」選單執行 Apps Script。
+前端純 Mock 模式下，CSV 欄位解析與資料更新被明確規劃為**目前保留項（設計保留行為）**。由於真正的 CSV 欄位解析與運算需依賴 Google Sheets 的 Apps Script（`Utilities.parseCsv` 及 Sheets API 進行排程計算），因此前端在接收 CSV 檔案後，設計為**僅記錄一筆「待處理」日誌，而不直接更新前端本地股票資料**。此設計並非未完成核心功能，而是為了維持資料一致性與運算邊界。
+如需執行真正的資料同步，請直接至 Google Sheets 介面使用「手動匯入 CSV」選單執行 Apps Script。
 
 #### BackupPayload 相容性
 
@@ -113,7 +112,7 @@
 
 ## 風險與注意事項
 
-1. CSV 同步目前只能透過 Google Sheets Apps Script 執行，前端只是記錄接收日誌。
+1. CSV 同步為目前設計保留項，前端設計為僅記錄接收日誌，核心解析及更新流程仍由 Google Sheets Apps Script 負責。
 2. 若後續新增或重命名 `stock_db` 欄位，需同步更新 `DB_COL`、`getDbHeaders()`、`mapping document.md` 三處，避免匯入還原失準。
 3. `mapping document.md` 是欄位與 domain model 的契約邊界表，欄位變更時請優先更新此文件，再同步 code 與 schema。
 4. `tradepilot_ui_extensions` 不進備份，若使用者換裝置或清除 localStorage，tags/notes 會遺失。未來可考慮在 exportDatabaseBackup 加入 `ui_extensions` 作為附加 section（不影響 GAS 相容性）。
