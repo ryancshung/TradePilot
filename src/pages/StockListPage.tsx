@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { StockData, SystemMeta } from '../lib/types';
+import { SystemMeta, StockListItem } from '../lib/types';
 import { api } from '../lib/api/client';
 import SettingsDrawer from '../components/SettingsDrawer';
 import ImportExportDrawer from '../components/ImportExportDrawer';
@@ -15,14 +15,35 @@ import {
 } from 'lucide-react';
 
 interface StockListPageProps {
-  stocks: StockData[];
+  stocks: StockListItem[];
   meta: SystemMeta | null;
   onSelectStock: (id: string) => void;
   onRefresh: () => void;
 }
 
-type SortField = keyof StockData | '';
+type SortField = 
+  | 'id' 
+  | 'name' 
+  | 'price.currPrice' 
+  | 'price.diff' 
+  | 'price.pct' 
+  | 'price.high' 
+  | 'price.low' 
+  | 'zone.buyZoneStatus' 
+  | 'zone.sellZoneStatus' 
+  | 'zone.recommendation' 
+  | 'zone.highlight' 
+  | 'volSignal' 
+  | 'priceAlert' 
+  | 'price.marketCap' 
+  | '';
+
 type SortOrder = 'asc' | 'desc';
+
+function getDeepValue(obj: any, path: string): any {
+  if (!path) return undefined;
+  return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+}
 
 export default function StockListPage({ stocks, meta, onSelectStock, onRefresh }: StockListPageProps) {
   // UI 抽屜狀態
@@ -49,7 +70,6 @@ export default function StockListPage({ stocks, meta, onSelectStock, onRefresh }
 
   // 全域新增/刪除標籤 (模擬)
   const handleAddTag = async (tag: string) => {
-    // 隨意挑選第一支股票加上該標籤作為模擬
     if (stocks.length > 0) {
       const stock = stocks[0];
       const updatedTags = Array.from(new Set([...(stock.tags || []), tag]));
@@ -59,7 +79,6 @@ export default function StockListPage({ stocks, meta, onSelectStock, onRefresh }
   };
 
   const handleDeleteTag = async (tag: string) => {
-    // 將所有包含此標籤的股票標籤移除
     for (const stock of stocks) {
       if (stock.tags && stock.tags.includes(tag)) {
         const updatedTags = stock.tags.filter(t => t !== tag);
@@ -70,7 +89,7 @@ export default function StockListPage({ stocks, meta, onSelectStock, onRefresh }
   };
 
   // 排序處理
-  const handleSort = (field: keyof StockData) => {
+  const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortOrder(o => (o === 'asc' ? 'desc' : 'asc'));
     } else {
@@ -94,8 +113,8 @@ export default function StockListPage({ stocks, meta, onSelectStock, onRefresh }
       .sort((a, b) => {
         if (!sortField) return 0;
 
-        let aVal = a[sortField];
-        let bVal = b[sortField];
+        let aVal = getDeepValue(a, sortField);
+        let bVal = getDeepValue(b, sortField);
 
         // 處理 null/undefined
         if (aVal === null || aVal === undefined) return sortOrder === 'asc' ? 1 : -1;
@@ -120,8 +139,8 @@ export default function StockListPage({ stocks, meta, onSelectStock, onRefresh }
     let buyReady = 0;
     let sellReady = 0;
     stocks.forEach(s => {
-      if (s.buyZoneStatus?.startsWith('可買進')) buyReady++;
-      if (s.sellZoneStatus?.startsWith('可賣出')) sellReady++;
+      if (s.zone.buyZoneStatus?.startsWith('可買進')) buyReady++;
+      if (s.zone.sellZoneStatus?.startsWith('可賣出')) sellReady++;
     });
     return { total: stocks.length, buyReady, sellReady };
   }, [stocks]);
@@ -236,31 +255,31 @@ export default function StockListPage({ stocks, meta, onSelectStock, onRefresh }
                 </th>
                 
                 {/* 可滾動欄位 */}
-                <th className="px-4 py-3.5 w-28 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('currPrice')}>
+                <th className="px-4 py-3.5 w-28 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('price.currPrice')}>
                   <div className="flex items-center gap-1 justify-end">現價 <ArrowUpDown className="w-3.5 h-3.5" /></div>
                 </th>
-                <th className="px-4 py-3.5 w-24 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('diff')}>
+                <th className="px-4 py-3.5 w-24 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('price.diff')}>
                   <div className="flex items-center gap-1 justify-end">漲跌 <ArrowUpDown className="w-3.5 h-3.5" /></div>
                 </th>
-                <th className="px-4 py-3.5 w-24 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('pct')}>
+                <th className="px-4 py-3.5 w-24 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('price.pct')}>
                   <div className="flex items-center gap-1 justify-end">幅度 <ArrowUpDown className="w-3.5 h-3.5" /></div>
                 </th>
-                <th className="px-4 py-3.5 w-24 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('high')}>
+                <th className="px-4 py-3.5 w-24 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('price.high')}>
                   <div className="flex items-center gap-1 justify-end">最高 <ArrowUpDown className="w-3.5 h-3.5" /></div>
                 </th>
-                <th className="px-4 py-3.5 w-24 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('low')}>
+                <th className="px-4 py-3.5 w-24 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('price.low')}>
                   <div className="flex items-center gap-1 justify-end">最低 <ArrowUpDown className="w-3.5 h-3.5" /></div>
                 </th>
-                <th className="px-4 py-3.5 w-44 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('buyZoneStatus')}>
+                <th className="px-4 py-3.5 w-44 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('zone.buyZoneStatus')}>
                   <div className="flex items-center gap-1">區間買進狀態 <ArrowUpDown className="w-3.5 h-3.5" /></div>
                 </th>
-                <th className="px-4 py-3.5 w-44 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('sellZoneStatus')}>
+                <th className="px-4 py-3.5 w-44 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('zone.sellZoneStatus')}>
                   <div className="flex items-center gap-1">區間賣出狀態 <ArrowUpDown className="w-3.5 h-3.5" /></div>
                 </th>
-                <th className="px-4 py-3.5 w-48 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('recommendation')}>
+                <th className="px-4 py-3.5 w-48 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('zone.recommendation')}>
                   <div className="flex items-center gap-1">區間買賣建議 <ArrowUpDown className="w-3.5 h-3.5" /></div>
                 </th>
-                <th className="px-4 py-3.5 w-44 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('highlight')}>
+                <th className="px-4 py-3.5 w-44 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('zone.highlight')}>
                   <div className="flex items-center gap-1">區間亮點 <ArrowUpDown className="w-3.5 h-3.5" /></div>
                 </th>
                 <th className="px-4 py-3.5 w-44">均線狀況</th>
@@ -271,7 +290,7 @@ export default function StockListPage({ stocks, meta, onSelectStock, onRefresh }
                 <th className="px-4 py-3.5 w-28 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('priceAlert')}>
                   <div className="flex items-center gap-1">到價通知 <ArrowUpDown className="w-3.5 h-3.5" /></div>
                 </th>
-                <th className="px-4 py-3.5 w-36 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('marketCap')}>
+                <th className="px-4 py-3.5 w-36 cursor-pointer select-none hover:text-brand-500 transition-colors" onClick={() => handleSort('price.marketCap')}>
                   <div className="flex items-center gap-1 justify-end">市值 (百萬) <ArrowUpDown className="w-3.5 h-3.5" /></div>
                 </th>
               </tr>
@@ -286,8 +305,8 @@ export default function StockListPage({ stocks, meta, onSelectStock, onRefresh }
                 </tr>
               ) : (
                 filteredStocks.map((stock) => {
-                  const isUp = (stock.diff || 0) > 0;
-                  const isDown = (stock.diff || 0) < 0;
+                  const isUp = (stock.price.diff || 0) > 0;
+                  const isDown = (stock.price.diff || 0) < 0;
                   
                   return (
                     <tr 
@@ -314,65 +333,65 @@ export default function StockListPage({ stocks, meta, onSelectStock, onRefresh }
 
                       {/* 可滾動欄位 */}
                       <td className="px-4 py-3 text-right font-mono font-bold">
-                        {formatNum(stock.currPrice, 2)}
+                        {formatNum(stock.price.currPrice, 2)}
                       </td>
                       
                       <td className={`px-4 py-3 text-right font-mono font-bold ${isUp ? 'text-red-500' : isDown ? 'text-emerald-500' : ''}`}>
                         <div className="flex items-center justify-end gap-0.5">
                           {isUp && <TrendingUp className="w-3 h-3" />}
                           {isDown && <TrendingDown className="w-3 h-3" />}
-                          {formatNum(stock.diff, 2)}
+                          {formatNum(stock.price.diff, 2)}
                         </div>
                       </td>
                       
                       <td className={`px-4 py-3 text-right font-mono font-bold ${isUp ? 'text-red-500' : isDown ? 'text-emerald-500' : ''}`}>
-                        {formatPct(stock.pct)}
+                        {formatPct(stock.price.pct)}
                       </td>
 
                       <td className="px-4 py-3 text-right font-mono text-slate-500 dark:text-slate-400">
-                        {formatNum(stock.high, 2)}
+                        {formatNum(stock.price.high, 2)}
                       </td>
                       
                       <td className="px-4 py-3 text-right font-mono text-slate-500 dark:text-slate-400">
-                        {formatNum(stock.low, 2)}
+                        {formatNum(stock.price.low, 2)}
                       </td>
 
                       {/* 買進狀態 */}
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 rounded font-semibold text-[10px] ${
-                          stock.buyZoneStatus?.startsWith('可買進') 
+                          stock.zone.buyZoneStatus?.startsWith('可買進') 
                             ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' 
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
                         }`}>
-                          {stock.buyZoneStatus || '-'}
+                          {stock.zone.buyZoneStatus || '-'}
                         </span>
                       </td>
 
                       {/* 賣出狀態 */}
                       <td className="px-4 py-3">
                         <span className={`px-2 py-1 rounded font-semibold text-[10px] ${
-                          stock.sellZoneStatus?.startsWith('可賣出') 
+                          stock.zone.sellZoneStatus?.startsWith('可賣出') 
                             ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20' 
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
                         }`}>
-                          {stock.sellZoneStatus || '-'}
+                          {stock.zone.sellZoneStatus || '-'}
                         </span>
                       </td>
 
-                      <td className="px-4 py-3 truncate max-w-xs" title={stock.recommendation}>
-                        {stock.recommendation || '-'}
+                      <td className="px-4 py-3 truncate max-w-xs" title={stock.zone.recommendation}>
+                        {stock.zone.recommendation || '-'}
                       </td>
 
-                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400 truncate max-w-xs" title={stock.highlight}>
-                        {stock.highlight || '-'}
+                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400 truncate max-w-xs" title={stock.zone.highlight}>
+                        {stock.zone.highlight || '-'}
                       </td>
 
                       <td className="px-4 py-3 font-mono whitespace-pre-line leading-relaxed text-slate-600 dark:text-slate-300">
-                        {stock.maStatus || '-'}
+                        {stock.ma.status || '-'}
                       </td>
 
                       <td className="px-4 py-3 font-mono whitespace-pre-line leading-relaxed text-slate-500 dark:text-slate-400">
-                        {stock.maKey || '-'}
+                        {stock.ma.keyEvents || '-'}
                       </td>
 
                       <td className="px-4 py-3">
@@ -401,7 +420,7 @@ export default function StockListPage({ stocks, meta, onSelectStock, onRefresh }
                       </td>
 
                       <td className="px-4 py-3 text-right font-mono text-slate-500 dark:text-slate-400">
-                        {formatNum(stock.marketCap, 0)}
+                        {formatNum(stock.price.marketCap, 0)}
                       </td>
                     </tr>
                   );

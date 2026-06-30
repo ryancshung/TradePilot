@@ -98,8 +98,8 @@ export default function StockDetailPage({ stockId, onBack }: StockDetailPageProp
   };
 
   // 格式化輔助
-  const isUp = (stock.diff || 0) > 0;
-  const isDown = (stock.diff || 0) < 0;
+  const isUp = (stock.price.diff || 0) > 0;
+  const isDown = (stock.price.diff || 0) < 0;
   const formatPct = (val: number | null) => {
     if (val === null) return '-';
     const percent = val * 100;
@@ -151,7 +151,7 @@ export default function StockDetailPage({ stockId, onBack }: StockDetailPageProp
               {stock.id}
             </span>
             <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono hidden sm:inline">
-              市值: {stock.marketCap ? `${(stock.marketCap / 1000).toFixed(1)}B TWD` : '-'}
+              市值: {stock.price.marketCap ? `${(stock.price.marketCap / 1000).toFixed(1)}B TWD` : '-'}
             </span>
           </div>
           
@@ -209,12 +209,12 @@ export default function StockDetailPage({ stockId, onBack }: StockDetailPageProp
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-lg border border-slate-100 dark:border-slate-800">
               <span className="text-[10px] text-slate-400 block mb-1">今日成交價</span>
-              <span className="text-2xl font-black font-mono">{stock.currPrice ?? '-'}</span>
+              <span className="text-2xl font-black font-mono">{stock.price.currPrice ?? '-'}</span>
             </div>
             <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-lg border border-slate-100 dark:border-slate-800">
               <span className="text-[10px] text-slate-400 block mb-1">今日漲跌幅</span>
               <span className={`text-xl font-bold font-mono ${isUp ? 'text-red-500' : isDown ? 'text-emerald-500' : ''}`}>
-                {formatPct(stock.pct)}
+                {formatPct(stock.price.pct)}
               </span>
             </div>
           </div>
@@ -222,24 +222,24 @@ export default function StockDetailPage({ stockId, onBack }: StockDetailPageProp
           <div className="space-y-2 text-xs font-semibold">
             <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-850">
               <span className="text-slate-400">昨收價</span>
-              <span className="font-mono">{stock.prevPrice ?? '-'}</span>
+              <span className="font-mono">{stock.price.prevPrice ?? '-'}</span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-850">
               <span className="text-slate-400">今日最高 / 最低</span>
               <span className="font-mono text-slate-700 dark:text-slate-300">
-                {stock.high ?? '-'} / {stock.low ?? '-'}
+                {stock.price.high ?? '-'} / {stock.price.low ?? '-'}
               </span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-850">
               <span className="text-slate-400">昨日最高 / 最低</span>
               <span className="font-mono text-slate-500">
-                {stock.prevHigh ?? '-'} / {stock.prevLow ?? '-'}
+                {stock.price.prevHigh ?? '-'} / {stock.price.prevLow ?? '-'}
               </span>
             </div>
             <div className="flex justify-between py-1">
               <span className="text-slate-400">6個月最高 / 最低</span>
               <span className="font-mono text-brand-600 dark:text-brand-400">
-                {stock.halfYearHigh ?? '-'} / {stock.halfYearLow ?? '-'}
+                {stock.price.halfYearHigh ?? '-'} / {stock.price.halfYearLow ?? '-'}
               </span>
             </div>
           </div>
@@ -258,19 +258,19 @@ export default function StockDetailPage({ stockId, onBack }: StockDetailPageProp
               <div className="space-y-2 text-xs font-semibold">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500">5MA 乖離</span>
-                  {renderBiasBar(stock.ma5 ? (stock.currPrice! - stock.ma5) / stock.ma5 : null)}
+                  {renderBiasBar(stock.ma.ma5 ? (stock.price.currPrice! - stock.ma.ma5) / stock.ma.ma5 : null)}
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500">10MA 乖離</span>
-                  {renderBiasBar(stock.ma10 ? (stock.currPrice! - stock.ma10) / stock.ma10 : null)}
+                  {renderBiasBar(stock.ma.ma10 ? (stock.price.currPrice! - stock.ma.ma10) / stock.ma.ma10 : null)}
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500">20MA 乖離</span>
-                  {renderBiasBar(stock.ma20 ? (stock.currPrice! - stock.ma20) / stock.ma20 : null)}
+                  {renderBiasBar(stock.ma.ma20 ? (stock.price.currPrice! - stock.ma.ma20) / stock.ma.ma20 : null)}
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500">60MA 乖離</span>
-                  {renderBiasBar(stock.ma60 ? (stock.currPrice! - stock.ma60) / stock.ma60 : null)}
+                  {renderBiasBar(stock.ma.ma60 ? (stock.price.currPrice! - stock.ma.ma60) / stock.ma.ma60 : null)}
                 </div>
               </div>
             </div>
@@ -283,14 +283,14 @@ export default function StockDetailPage({ stockId, onBack }: StockDetailPageProp
                 <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-100 dark:border-slate-800">
                   <span className="text-[9px] text-slate-400 uppercase block mb-1">今日均線交叉</span>
                   <div className="text-xs font-bold font-mono whitespace-pre-line leading-relaxed text-slate-700 dark:text-slate-300">
-                    {stock.maStatus || '無交叉突破'}
+                    {stock.ma.status || '無交叉突破'}
                   </div>
                 </div>
                 
                 <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-100 dark:border-slate-800">
                   <span className="text-[9px] text-slate-400 uppercase block mb-1">突破/跌破 歷史紀錄</span>
                   <div className="text-xs font-mono whitespace-pre-line leading-relaxed text-slate-500 dark:text-slate-400">
-                    {stock.maKey || '無歷史紀錄'}
+                    {stock.ma.keyEvents || '無歷史紀錄'}
                   </div>
                 </div>
               </div>
@@ -316,32 +316,32 @@ export default function StockDetailPage({ stockId, onBack }: StockDetailPageProp
               <div className="bg-emerald-500/5 p-3 rounded-lg border border-emerald-500/10">
                 <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-bold block mb-1">買入下緣 / 上緣</span>
                 <span className="text-sm font-bold font-mono text-slate-700 dark:text-slate-300">
-                  {stock.buyLowerLimit?.toFixed(2) ?? '-'} / {stock.buyUpperLimit?.toFixed(2) ?? '-'}
+                  {stock.zone.buyLowerLimit?.toFixed(2) ?? '-'} / {stock.zone.buyUpperLimit?.toFixed(2) ?? '-'}
                 </span>
               </div>
               <div className="bg-rose-500/5 p-3 rounded-lg border border-rose-500/10">
                 <span className="text-[9px] text-rose-600 dark:text-rose-400 font-bold block mb-1">賣出下緣 / 上緣</span>
                 <span className="text-sm font-bold font-mono text-slate-700 dark:text-slate-300">
-                  {stock.sellLowerLimit?.toFixed(2) ?? '-'} / {stock.sellUpperLimit?.toFixed(2) ?? '-'}
+                  {stock.zone.sellLowerLimit?.toFixed(2) ?? '-'} / {stock.zone.sellUpperLimit?.toFixed(2) ?? '-'}
                 </span>
               </div>
             </div>
 
             <div className="space-y-2 text-xs">
               <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-850 font-semibold">
-                <span className="text-slate-400">區間買買建議</span>
-                <span className="text-slate-700 dark:text-slate-200">{stock.recommendation || '-'}</span>
+                <span className="text-slate-400">區間買進建議</span>
+                <span className="text-slate-700 dark:text-slate-200">{stock.zone.recommendation || '-'}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-100 dark:border-slate-850 font-semibold">
                 <span className="text-slate-400">買進/賣出觀察日期</span>
                 <span className="font-mono text-slate-700 dark:text-slate-300">
-                  {stock.buyObsDate ? stock.buyObsDate : '未設定'} / {stock.sellObsDate ? stock.sellObsDate : '未設定'}
+                  {stock.zone.buyObsDate ? stock.zone.buyObsDate : '未設定'} / {stock.zone.sellObsDate ? stock.zone.sellObsDate : '未設定'}
                 </span>
               </div>
               <div className="flex justify-between py-1">
                 <span className="text-slate-400">突破/跌破/刷新次數</span>
                 <span className="font-mono text-slate-500">
-                  {stock.breakoutCount} / {stock.breakdownCount} / {stock.refreshSupportCount}
+                  {stock.zone.breakoutCount} / {stock.zone.breakdownCount} / {stock.supports.refreshCount}
                 </span>
               </div>
             </div>
@@ -350,7 +350,7 @@ export default function StockDetailPage({ stockId, onBack }: StockDetailPageProp
           <div className="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-lg border border-slate-200/50 dark:border-slate-800/50 mt-3">
             <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block mb-1">區間亮點</span>
             <p className="text-xs text-slate-600 dark:text-slate-400 font-medium leading-relaxed">
-              {stock.highlight || '本週期無特別亮點。'}
+              {stock.zone.highlight || '本週期無特別亮點。'}
             </p>
           </div>
         </div>

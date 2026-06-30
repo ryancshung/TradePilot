@@ -8,25 +8,23 @@ interface StockBoxChartProps {
 export default function StockBoxChart({ stock }: StockBoxChartProps) {
   // 過濾出有效的壓力與支撐線數值 (取前3條)
   const pressureLevels = useMemo(() => {
-    return stock.pressures.filter((p): p is number => p !== null).slice(0, 3);
+    return (stock.pressures?.levels ?? []).filter((p): p is number => p !== null).slice(0, 3);
   }, [stock.pressures]);
 
   const supportLevels = useMemo(() => {
-    return stock.supports.filter((s): s is number => s !== null).slice(0, 3);
+    return (stock.supports?.levels ?? []).filter((s): s is number => s !== null).slice(0, 3);
   }, [stock.supports]);
 
-  const {
-    currPrice,
-    prevPrice,
-    high: currHigh,
-    low: currLow,
-    prevHigh,
-    prevLow,
-    buyLowerLimit,
-    buyUpperLimit,
-    sellLowerLimit,
-    sellUpperLimit,
-  } = stock;
+  const currPrice = stock.price.currPrice;
+  const prevPrice = stock.price.prevPrice;
+  const currHigh = stock.price.high;
+  const currLow = stock.price.low;
+  const prevHigh = stock.price.prevHigh;
+  const prevLow = stock.price.prevLow;
+  const buyLowerLimit = stock.zone.buyLowerLimit;
+  const buyUpperLimit = stock.zone.buyUpperLimit;
+  const sellLowerLimit = stock.zone.sellLowerLimit;
+  const sellUpperLimit = stock.zone.sellUpperLimit;
 
   // 收集所有需要進行座標對齊的價格點，以計算 Y 軸比例尺
   const allPrices = useMemo(() => {

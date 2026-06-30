@@ -1,6 +1,24 @@
-import { StockData, SystemMeta, SystemSettings, ImportLog } from '../types';
+import { ImportLog } from '../types';
 
-export const INITIAL_SETTINGS: SystemSettings = {
+export interface RawSystemSettings {
+  range_upper_mult: number;
+  range_lower_mult: number;
+  buy_signal_mult: number;
+  sell_signal_mult: number;
+  vol_burst_mult: number;
+  vol_inc_dec_mult: number;
+  vol_dec_mult: number;
+}
+
+export interface RawSystemMeta {
+  tradeDate: string;
+  nextTradeDate: string;
+  obsDate: string;
+  appVersion: string;
+  lastUpdated: string;
+}
+
+export const INITIAL_SETTINGS: RawSystemSettings = {
   range_upper_mult: 1.1,
   range_lower_mult: 0.9,
   buy_signal_mult: 1.03,
@@ -10,7 +28,7 @@ export const INITIAL_SETTINGS: SystemSettings = {
   vol_dec_mult: 0.6
 };
 
-export const INITIAL_META: SystemMeta = {
+export const INITIAL_META: RawSystemMeta = {
   tradeDate: '2026/06/22',
   nextTradeDate: '2026/06/23',
   obsDate: '2026/06/23',
@@ -23,7 +41,7 @@ export const INITIAL_LOGS: ImportLog[] = [
   { timestamp: '2026-06-22T17:35:12.000Z', status: '成功', message: '已從 JSON 還原整個資料庫｜來源系統=TradePilot_StockSystem｜來源版本=v4.5-json-1.2｜schema=1.0.0' }
 ];
 
-export const INITIAL_STOCKS: StockData[] = [
+export const INITIAL_STOCKS: any[] = [
   {
     id: '0050',
     name: '元大台灣50',

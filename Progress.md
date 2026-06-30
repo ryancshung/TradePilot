@@ -110,10 +110,9 @@
 
 ## 目前下一步
 
-1. **Cloudflare Pages 部署**：push 目前 commit 到 GitHub，觸發自動部署，驗證線上環境功能正常。
-2. **GAS 部署測試**：將 `Core.gs`、`APPcode.gs`、`ZoneEngine.gs` 部署至實際 Google Sheets Runtime 進行現場測試。
-3. **實體 E2E 驗證**：從 GAS 匯出真實備份 JSON → 前端匯入 → 確認股票資料完整還原且畫面正確顯示。
-4. **GAS Web App（未來）**：若有需要即時讀取 Sheets 資料，可在 `APPcode.gs` 加入 `doGet`/`doPost`，前端建立 `GasApiClient` 實作 `ApiClient` 介面，直接替換 mock。
+1. **GAS 部署與端對端測試**：將 `doGet.gs` 貼入 Google Sheets Apps Script，部署為 Web App（誰有權存取=任何人），取得 URL 後貼入前端設定抽屜中的「GAS API URL」欄位，切換至 API 模式驗證資料是否即時同步。
+2. **寫入端 API（Phase B-3）**：若確認唯讀同步正常，下一階段可實作 `doPost(e)` 以支援前端更新設定、takeProfit/stopLoss 等欄位回寫 Sheets。
+3. **Cloudflare Pages 部署**：驗證線上環境 CORS 行為與 GAS API 模式正常連線（GAS Web App 本身不需要 CORS 設定，但需確認 Cloudflare 環境能正常 fetch）。
 
 ## 風險與注意事項
 
@@ -129,9 +128,12 @@
 2. ✅ `getStocks` / `getSystemMeta` / `getSettings` / `getImportLogs` 讀取正確。
 3. ✅ `updateStock` / `updateSettings` 回寫正確，tags/notes 路徑統一走 `tradepilot_ui_extensions`。
 4. ✅ `exportDatabaseBackup` / `importDatabaseBackup` 端對端驗證通過（`test-client-flow.ts`）。
-5. ✅ `npx tsc --noEmit` 通過，`npm run build` 通過（236kB）。
-6. ⬜ Cloudflare Pages 線上部署驗證。
-7. ⬜ GAS 現場部署測試（實體備份 E2E）。
+5. ✅ `npx tsc --noEmit` 通過，`npm run build` 通過（248kB）。
+6. ✅ `HttpApiClient` 完整實作 `getStocks` / `getStockById` / `getSystemMeta` / `getSettings` / `getImportLogs`。
+7. ✅ `doGet.gs` 已建立，支援 `?action=getStocks|getSettings|getMeta|getImportLogs` 四個路由。
+8. ✅ 前端設定抽屜提供 Mock ↔ GAS API 切換 UI，支援 URL 輸入與重載。
+9. ⬜ GAS Web App 實際部署並端對端驗證（需使用者操作）。
+10. ⬜ Cloudflare Pages 上線驗證（含 GAS API 模式連線測試）。
 
 ## 使用方式
 

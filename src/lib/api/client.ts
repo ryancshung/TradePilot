@@ -1,4 +1,5 @@
-import { StockData, SystemMeta, SystemSettings, ImportLog } from '../types';
+import { StockDetail, StockListItem, MetaInfo, AppSettings, ImportLog } from './types';
+import { StorageAdapter, BrowserStorageAdapter } from './adapters';
 import {
   validateBackupJson,
   getSheetFromPayload,
@@ -16,12 +17,12 @@ import type { StockRow, TradeMeta, BackupPayload } from '../../../types';
 import { INITIAL_STOCKS, INITIAL_SETTINGS, INITIAL_META, INITIAL_LOGS } from './mockData';
 
 export interface ApiClient {
-  getStocks(): Promise<StockData[]>;
-  getStockById(id: string): Promise<StockData | null>;
-  updateStock(id: string, update: Partial<StockData>): Promise<StockData>;
-  getSystemMeta(): Promise<SystemMeta>;
-  getSettings(): Promise<SystemSettings>;
-  updateSettings(settings: SystemSettings): Promise<SystemSettings>;
+  getStocks(): Promise<StockListItem[]>;
+  getStockById(id: string): Promise<StockDetail | null>;
+  updateStock(id: string, update: Partial<StockDetail>): Promise<StockDetail>;
+  getSystemMeta(): Promise<MetaInfo>;
+  getSettings(): Promise<AppSettings>;
+  updateSettings(settings: AppSettings): Promise<AppSettings>;
   getImportLogs(): Promise<ImportLog[]>;
   importCsv(csvContent: string): Promise<{ success: boolean; deletedIds: string[] }>;
   importDatabaseBackup(jsonContent: string): Promise<{ success: boolean; meta: any }>;
@@ -37,7 +38,6 @@ const STORAGE_KEYS = {
   EXTENSIONS: 'tradepilot_ui_extensions',
 } as const;
 
-/** tags / notes 每支股票的 UI 擴充欄位，不進備份 */
 interface UiExtension {
   tags: string[];
   notes: string;
@@ -45,9 +45,8 @@ interface UiExtension {
 type UiExtensions = Record<string, UiExtension>;
 
 // ─────────────────────────────────────────────
-// 日期格式化工具（StockRow ↔ StockData 層）
+// 日期格式化工具
 // ─────────────────────────────────────────────
-
 function _fmtDate(d: Date | string | null | undefined): string | null {
   if (!d) return null;
   if (d instanceof Date) {
@@ -69,13 +68,185 @@ function _parseDate(s: string | null): Date | string | null {
 }
 
 // ─────────────────────────────────────────────
-// 轉接層：StockRow ↔ StockData（read-side adapter）
+// 轉接層：扁平 StockData (raw shape) ↔ 新 Domain Model
 // ─────────────────────────────────────────────
+function toStockDetail(flat: any, ext?: UiExtension): StockDetail {
+  const tags = ext?.tags ?? flat.tags ?? [];
+  const notes = ext?.notes ?? flat.notes ?? '';
+  return {
+    id: flat.id,
+    name: flat.name,
+    tags,
+    volSignal: flat.volSignal ?? '',
+    priceAlert: flat.priceAlert ?? '',
+    notes,
+    takeProfit: flat.takeProfit ?? null,
+    stopLoss: flat.stopLoss ?? null,
+    price: {
+      currPrice: flat.currPrice ?? null,
+      prevPrice: flat.prevPrice ?? null,
+      diff: flat.diff ?? null,
+      pct: flat.pct ?? null,
+      high: flat.high ?? null,
+      low: flat.low ?? null,
+      prevHigh: flat.prevHigh ?? null,
+      prevLow: flat.prevLow ?? null,
+      halfYearHigh: flat.halfYearHigh ?? null,
+      halfYearLow: flat.halfYearLow ?? null,
+      marketCap: flat.marketCap ?? null,
+    },
+    ma: {
+      ma5: flat.ma5 ?? null,
+      ma10: flat.ma10 ?? null,
+      ma20: flat.ma20 ?? null,
+      ma60: flat.ma60 ?? null,
+      prevMa5: flat.prevMa5 ?? null,
+      prevMa10: flat.prevMa10 ?? null,
+      prevMa20: flat.prevMa20 ?? null,
+      prevMa60: flat.prevMa60 ?? null,
+      status: flat.maStatus ?? '',
+      keyEvents: flat.maKey ?? '',
+    },
+    zone: {
+      buyLowerLimit: flat.buyLowerLimit ?? null,
+      buyUpperLimit: flat.buyUpperLimit ?? null,
+      sellLowerLimit: flat.sellLowerLimit ?? null,
+      sellUpperLimit: flat.sellUpperLimit ?? null,
+      buyZoneStatus: flat.buyZoneStatus ?? '',
+      sellZoneStatus: flat.sellZoneStatus ?? '',
+      recommendation: flat.recommendation ?? '',
+      highlight: flat.highlight ?? '',
+      buyObsDate: flat.buyObsDate ?? null,
+      sellObsDate: flat.sellObsDate ?? null,
+      breakoutCount: flat.breakoutCount ?? 0,
+      breakdownCount: flat.breakdownCount ?? 0,
+      superBreakoutCount: flat.superBreakoutCount ?? 0,
+      superBreakdownCount: flat.superBreakdownCount ?? 0,
+      refreshSupportCount: flat.refreshSupportCount ?? 0,
+      refreshPressureCount: flat.refreshPressureCount ?? 0,
+      noVolatilityCount: flat.noVolatilityCount ?? 0,
+    },
+    supports: {
+      levels: flat.supports ?? [],
+      refreshCount: flat.refreshSupportCount ?? 0,
+    },
+    pressures: {
+      levels: flat.pressures ?? [],
+      refreshCount: flat.refreshPressureCount ?? 0,
+    }
+  };
+}
 
-function stockRowToStockData(row: StockRow, ext?: UiExtension): StockData {
+function toFlatStock(detail: StockDetail): any {
+  return {
+    id: detail.id,
+    name: detail.name,
+    currPrice: detail.price.currPrice,
+    prevPrice: detail.price.prevPrice,
+    diff: detail.price.diff,
+    pct: detail.price.pct,
+    high: detail.price.high,
+    low: detail.price.low,
+    volBurst: detail.volSignal === '爆量',
+    ma5: detail.ma.ma5,
+    ma10: detail.ma.ma10,
+    ma20: detail.ma.ma20,
+    ma60: detail.ma.ma60,
+    marketCap: detail.price.marketCap,
+    prevHigh: detail.price.prevHigh,
+    prevLow: detail.price.prevLow,
+    prevMa5: detail.ma.prevMa5,
+    prevMa10: detail.ma.prevMa10,
+    prevMa20: detail.ma.prevMa20,
+    prevMa60: detail.ma.prevMa60,
+    supports: detail.supports.levels,
+    pressures: detail.pressures.levels,
+    breakoutCount: detail.zone.breakoutCount,
+    breakdownCount: detail.zone.breakdownCount,
+    superBreakoutCount: detail.zone.superBreakoutCount,
+    superBreakdownCount: detail.zone.superBreakdownCount,
+    refreshSupportCount: detail.supports.refreshCount,
+    refreshPressureCount: detail.pressures.refreshCount,
+    noVolatilityCount: detail.zone.noVolatilityCount,
+    buyLowerLimit: detail.zone.buyLowerLimit,
+    buyUpperLimit: detail.zone.buyUpperLimit,
+    sellLowerLimit: detail.zone.sellLowerLimit,
+    sellUpperLimit: detail.zone.sellUpperLimit,
+    halfYearHigh: detail.price.halfYearHigh,
+    halfYearLow: detail.price.halfYearLow,
+    buyZoneStatus: detail.zone.buyZoneStatus,
+    sellZoneStatus: detail.zone.sellZoneStatus,
+    recommendation: detail.zone.recommendation,
+    highlight: detail.zone.highlight,
+    buyObsDate: detail.zone.buyObsDate,
+    sellObsDate: detail.zone.sellObsDate,
+    takeProfit: detail.takeProfit,
+    stopLoss: detail.stopLoss,
+    notes: detail.notes,
+    tags: detail.tags,
+    maStatus: detail.ma.status,
+    maKey: detail.ma.keyEvents,
+    priceAlert: detail.priceAlert,
+    volSignal: detail.volSignal,
+  };
+}
+
+// ─────────────────────────────────────────────
+// 轉接層：SystemSettings (raw) ↔ AppSettings
+// ─────────────────────────────────────────────
+function toAppSettings(raw: any): AppSettings {
+  return {
+    rangeUpperMult: raw.range_upper_mult ?? 1.1,
+    rangeLowerMult: raw.range_lower_mult ?? 0.9,
+    buySignalMult: raw.buy_signal_mult ?? 1.03,
+    sellSignalMult: raw.sell_signal_mult ?? 0.97,
+    volBurstMult: raw.vol_burst_mult ?? 1.5,
+    volIncDecMult: raw.vol_inc_dec_mult ?? 1.0,
+    volDecMult: raw.vol_dec_mult ?? 0.6,
+  };
+}
+
+function toSystemSettings(settings: AppSettings): any {
+  return {
+    range_upper_mult: settings.rangeUpperMult,
+    range_lower_mult: settings.rangeLowerMult,
+    buy_signal_mult: settings.buySignalMult,
+    sell_signal_mult: settings.sellSignalMult,
+    vol_burst_mult: settings.volBurstMult,
+    vol_inc_dec_mult: settings.volIncDecMult,
+    vol_dec_mult: settings.volDecMult,
+  };
+}
+
+// ─────────────────────────────────────────────
+// 轉接層：SystemMeta (raw) ↔ MetaInfo
+// ─────────────────────────────────────────────
+function toMetaInfo(raw: any): MetaInfo {
+  return {
+    tradeDate: raw.tradeDate ?? '',
+    nextTradeDate: raw.nextTradeDate ?? '',
+    obsDate: raw.obsDate ?? '',
+    appVersion: raw.appVersion ?? 'v4.5-mock',
+    lastUpdated: raw.lastUpdated ?? '',
+  };
+}
+
+export function toSystemMeta(meta: MetaInfo): any {
+  return {
+    tradeDate: meta.tradeDate,
+    nextTradeDate: meta.nextTradeDate,
+    obsDate: meta.obsDate,
+    appVersion: meta.appVersion,
+    lastUpdated: meta.lastUpdated,
+  };
+}
+
+// ─────────────────────────────────────────────
+// 轉接層：StockRow ↔ 扁平 StockData (用於備份解析)
+// ─────────────────────────────────────────────
+function stockRowToFlatData(row: StockRow): any {
   const s = row.stock;
   const z = row.zone;
-
   return {
     id: s.identity.id,
     name: s.identity.name,
@@ -120,8 +291,8 @@ function stockRowToStockData(row: StockRow, ext?: UiExtension): StockData {
     sellObsDate: _fmtDate(z.zone.sell.obsDate),
     takeProfit: z.risk.takeProfit,
     stopLoss: z.risk.stopLoss,
-    notes: ext?.notes ?? '',
-    tags: ext?.tags ?? [],
+    notes: '',
+    tags: [],
     maStatus: s.ma.status,
     maKey: s.ma.keyEvents,
     priceAlert: z.alert.price,
@@ -129,7 +300,7 @@ function stockRowToStockData(row: StockRow, ext?: UiExtension): StockData {
   };
 }
 
-function stockDataToStockRow(d: StockData): StockRow {
+function flatDataToStockRow(d: any): StockRow {
   return {
     stock: {
       identity: { id: d.id, name: d.name },
@@ -185,7 +356,6 @@ function stockDataToStockRow(d: StockData): StockRow {
   };
 }
 
-/** mock 端產生 stock_db header row（與 APPcode.gs getDbHeaders() 順序一致） */
 function _getDbHeadersMock(): string[] {
   return [
     '股票名稱', '股票代號',
@@ -207,144 +377,95 @@ function _getDbHeadersMock(): string[] {
   ];
 }
 
-/** TradeMeta ↔ SystemMeta 轉換 */
-function tradeMetaToSystemMeta(tm: TradeMeta, existing: SystemMeta): SystemMeta {
-  const fmtDate = (d: Date | string | null | undefined): string => {
-    if (!d) return '';
-    if (d instanceof Date) {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}/${m}/${day}`;
-    }
-    return String(d).trim();
-  };
-  return {
-    ...existing,
-    tradeDate: fmtDate(tm.tradeDate) || existing.tradeDate,
-    nextTradeDate: fmtDate(tm.nextDate) || existing.nextTradeDate,
-    obsDate: fmtDate(tm.obsDate) || existing.obsDate,
-  };
-}
-
-function systemMetaToTradeMeta(m: SystemMeta): TradeMeta {
-  const parse = (s: string): Date | string | null => {
-    if (!s) return null;
-    const match = s.match(/^(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})$/);
-    if (match) {
-      return new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10));
-    }
-    return s;
-  };
-  return {
-    tradeDate: parse(m.tradeDate),
-    nextDate: parse(m.nextTradeDate),
-    obsDate: parse(m.obsDate),
-  };
-}
-
 // ─────────────────────────────────────────────
-// MockApiClientImpl
+// MockApiClient 實作
 // ─────────────────────────────────────────────
+export class MockApiClient implements ApiClient {
+  constructor(private storage: StorageAdapter) {}
 
-class MockApiClientImpl implements ApiClient {
-  private getStorageItem<T>(key: string, defaultValue: T): T {
-    const item = localStorage.getItem(key);
-    if (!item) {
-      localStorage.setItem(key, JSON.stringify(defaultValue));
-      return defaultValue;
-    }
-    try {
-      return JSON.parse(item) as T;
-    } catch {
-      return defaultValue;
-    }
+  async getStocks(): Promise<StockListItem[]> {
+    const rawStocks = await this.storage.getItem<any[]>(STORAGE_KEYS.STOCKS, INITIAL_STOCKS);
+    const ext = await this.storage.getItem<UiExtensions>(STORAGE_KEYS.EXTENSIONS, {});
+    return rawStocks.map(s => {
+      const details = toStockDetail(s, ext[s.id]);
+      const { notes: _n, takeProfit: _t, stopLoss: _s, supports: _su, pressures: _pr, ...item } = details;
+      return item as StockListItem;
+    });
   }
 
-  private setStorageItem<T>(key: string, value: T): void {
-    localStorage.setItem(key, JSON.stringify(value));
+  async getStockById(id: string): Promise<StockDetail | null> {
+    const rawStocks = await this.storage.getItem<any[]>(STORAGE_KEYS.STOCKS, INITIAL_STOCKS);
+    const flat = rawStocks.find(s => s.id === id);
+    if (!flat) return null;
+
+    const ext = await this.storage.getItem<UiExtensions>(STORAGE_KEYS.EXTENSIONS, {});
+    return toStockDetail(flat, ext[id]);
   }
 
-  async getStocks(): Promise<StockData[]> {
-    const stocks = this.getStorageItem<StockData[]>(STORAGE_KEYS.STOCKS, INITIAL_STOCKS);
-    // 合併 ui_extensions，讓 tags/notes 在備份還原後依然存在
-    const ext = this.getStorageItem<UiExtensions>(STORAGE_KEYS.EXTENSIONS, {});
-    if (Object.keys(ext).length === 0) return stocks;
-    return stocks.map(s => ({
-      ...s,
-      tags: ext[s.id]?.tags ?? s.tags,
-      notes: ext[s.id]?.notes ?? s.notes,
-    }));
-  }
-
-  async getStockById(id: string): Promise<StockData | null> {
-    const stocks = await this.getStocks();
-    return stocks.find(s => s.id === id) || null;
-  }
-
-  async updateStock(id: string, update: Partial<StockData>): Promise<StockData> {
-    const stocks = await this.getStocks();
-    const idx = stocks.findIndex(s => s.id === id);
+  async updateStock(id: string, update: Partial<StockDetail>): Promise<StockDetail> {
+    const rawStocks = await this.storage.getItem<any[]>(STORAGE_KEYS.STOCKS, INITIAL_STOCKS);
+    const idx = rawStocks.findIndex(s => s.id === id);
     if (idx === -1) throw new Error('找不到該股票資料');
 
-    const updatedStock = { ...stocks[idx], ...update };
-    // 核心欄位寫回 tradepilot_stocks（不含 tags/notes）
-    const coreStocks = stocks.map((s, i) => {
-      if (i !== idx) return s;
-      const { tags: _t, notes: _n, ...core } = updatedStock;
-      return core as StockData;
-    });
-    this.setStorageItem(STORAGE_KEYS.STOCKS, coreStocks);
+    const rawStock = rawStocks[idx];
+    if ('takeProfit' in update) rawStock.takeProfit = update.takeProfit;
+    if ('stopLoss' in update) rawStock.stopLoss = update.stopLoss;
+    if ('notes' in update) rawStock.notes = update.notes;
+    if ('tags' in update) rawStock.tags = update.tags;
 
-    // tags/notes 單獨同步到 tradepilot_ui_extensions
+    await this.storage.setItem(STORAGE_KEYS.STOCKS, rawStocks);
+
     if ('tags' in update || 'notes' in update) {
-      const ext = this.getStorageItem<UiExtensions>(STORAGE_KEYS.EXTENSIONS, {});
+      const ext = await this.storage.getItem<UiExtensions>(STORAGE_KEYS.EXTENSIONS, {});
+      const originalExt = ext[id] || { tags: [], notes: '' };
       ext[id] = {
-        tags: updatedStock.tags ?? [],
-        notes: updatedStock.notes ?? '',
+        tags: update.tags ?? originalExt.tags,
+        notes: update.notes ?? originalExt.notes,
       };
-      this.setStorageItem(STORAGE_KEYS.EXTENSIONS, ext);
+      await this.storage.setItem(STORAGE_KEYS.EXTENSIONS, ext);
     }
 
-    return updatedStock;
+    const detail = await this.getStockById(id);
+    if (!detail) throw new Error('讀取更新後的個股失敗');
+    return detail;
   }
 
-  async getSystemMeta(): Promise<SystemMeta> {
-    return this.getStorageItem<SystemMeta>(STORAGE_KEYS.META, INITIAL_META);
+  async getSystemMeta(): Promise<MetaInfo> {
+    const raw = await this.storage.getItem<any>(STORAGE_KEYS.META, INITIAL_META);
+    return toMetaInfo(raw);
   }
 
-  async getSettings(): Promise<SystemSettings> {
-    return this.getStorageItem<SystemSettings>(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
+  async getSettings(): Promise<AppSettings> {
+    const raw = await this.storage.getItem<any>(STORAGE_KEYS.SETTINGS, INITIAL_SETTINGS);
+    return toAppSettings(raw);
   }
 
-  async updateSettings(settings: SystemSettings): Promise<SystemSettings> {
-    this.setStorageItem(STORAGE_KEYS.SETTINGS, settings);
+  async updateSettings(settings: AppSettings): Promise<AppSettings> {
+    const raw = toSystemSettings(settings);
+    await this.storage.setItem(STORAGE_KEYS.SETTINGS, raw);
 
-    // 從 raw 儲存讀核心欄位（不展開 ui_extensions），剛好被修改的部分
-    const rawStocks = this.getStorageItem<StockData[]>(STORAGE_KEYS.STOCKS, INITIAL_STOCKS);
+    const rawStocks = await this.storage.getItem<any[]>(STORAGE_KEYS.STOCKS, INITIAL_STOCKS);
     const updatedStocks = rawStocks.map(stock => {
       const lowVal = stock.low || 0;
       const highVal = stock.high || 0;
       return {
         ...stock,
-        buyLowerLimit: lowVal * settings.buy_signal_mult,
-        buyUpperLimit: lowVal * settings.range_upper_mult,
-        sellLowerLimit: highVal * settings.sell_signal_mult,
-        sellUpperLimit: highVal * settings.range_lower_mult,
+        buyLowerLimit: lowVal * settings.buySignalMult,
+        buyUpperLimit: lowVal * settings.rangeUpperMult,
+        sellLowerLimit: highVal * settings.sellSignalMult,
+        sellUpperLimit: highVal * settings.rangeLowerMult,
       };
     });
-    this.setStorageItem(STORAGE_KEYS.STOCKS, updatedStocks);
+    await this.storage.setItem(STORAGE_KEYS.STOCKS, updatedStocks);
 
     return settings;
   }
 
   async getImportLogs(): Promise<ImportLog[]> {
-    return this.getStorageItem<ImportLog[]>(STORAGE_KEYS.LOGS, INITIAL_LOGS);
+    return this.storage.getItem<ImportLog[]>(STORAGE_KEYS.LOGS, INITIAL_LOGS);
   }
 
   async importCsv(csvContent: string): Promise<{ success: boolean; deletedIds: string[] }> {
-    // 前端無法執行 CSV 欄位解析（需要 GAS Utilities.parseCsv + Sheets API）
-    // 只記錄操作日誌，不更新任何股票資料
     try {
       const logs = await this.getImportLogs();
       const sizeKB = (new TextEncoder().encode(csvContent).byteLength / 1024).toFixed(1);
@@ -353,62 +474,69 @@ class MockApiClientImpl implements ApiClient {
         status: '待處理',
         message: `前端已接收 CSV（${sizeKB} KB）。實際欄位解析與資料更新需至 Google Sheets 執行 Apps Script「手動匯入 CSV」。`,
       };
-      this.setStorageItem(STORAGE_KEYS.LOGS, [newLog, ...logs]);
+      await this.storage.setItem(STORAGE_KEYS.LOGS, [newLog, ...logs]);
       return { success: true, deletedIds: [] };
     } catch (_e) {
       return { success: false, deletedIds: [] };
     }
   }
 
-  // ── 備份還原：對齊正式 BackupPayload 契約 ──
-
   async importDatabaseBackup(jsonContent: string): Promise<{ success: boolean; meta: any }> {
     try {
-      // 1. Schema 驗證
       const result = validateBackupJson(jsonContent);
       if (!result.ok) {
         throw new Error(result.error);
       }
       const payload: BackupPayload = result.payload;
 
-      // 3. 還原 stock_db → StockData[]（核心欄位），tags/notes 維持走 ui_extensions
       const stockSheet = getSheetFromPayload(payload, 'stock_db');
       if (isValidSheetData(stockSheet)) {
         const stockRows: StockRow[] = sheetValuesToStockRows(stockSheet.values);
-        // 存入 tradepilot_stocks 時去掉 tags/notes，保持核心儲存乾淨
-        const coreStocks: StockData[] = stockRows.map(row => {
-          const full = stockRowToStockData(row);
-          const { tags: _t, notes: _n, ...core } = full;
-          return core as StockData;
+        const coreStocks = stockRows.map(row => {
+          const flat = stockRowToFlatData(row);
+          const { tags: _t, notes: _n, ...core } = flat;
+          return core;
         });
-        this.setStorageItem(STORAGE_KEYS.STOCKS, coreStocks);
-        // 如果有既有 ext，保留不動；若這次備份股票 id 有變化，ext 裡舊的也不清除（安全）
+        await this.storage.setItem(STORAGE_KEYS.STOCKS, coreStocks);
       }
 
-      // 4. 還原 settings → SystemSettings
       const settingsSheet = getSheetFromPayload(payload, 'settings');
       if (isValidSheetData(settingsSheet)) {
-        // settingsSheet.values 格式：[['參數名稱','數值','說明'], ['range_upper_mult', 1.1, '...'], ...]
         const rawMap: Record<string, unknown> = {};
         settingsSheet.values.slice(1).forEach((row) => {
           const key = String(row[0] ?? '').trim();
           if (key) rawMap[key] = row[1];
         });
         const ts = rawMapToTradeSettings(rawMap as any);
-        const settings: SystemSettings = tradeSettingsToRawMap(ts) as unknown as SystemSettings;
-        this.setStorageItem(STORAGE_KEYS.SETTINGS, settings);
+        const systemSettings = tradeSettingsToRawMap(ts);
+        await this.storage.setItem(STORAGE_KEYS.SETTINGS, systemSettings);
       }
 
-      // 5. 還原 meta → SystemMeta
       const metaSheet = getSheetFromPayload(payload, 'meta');
-      const existingMeta = await this.getSystemMeta();
+      const existingMeta = await this.storage.getItem<any>(STORAGE_KEYS.META, INITIAL_META);
       if (isValidSheetData(metaSheet)) {
         const tradeMeta: TradeMeta = metaValuesToTradeMeta(metaSheet.values);
-        const newMeta = tradeMetaToSystemMeta(tradeMeta, existingMeta);
-        this.setStorageItem(STORAGE_KEYS.META, newMeta);
+        
+        const fmtDate = (d: Date | string | null | undefined): string => {
+          if (!d) return '';
+          if (d instanceof Date) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}/${m}/${day}`;
+          }
+          return String(d).trim();
+        };
+
+        const newMeta = {
+          ...existingMeta,
+          tradeDate: fmtDate(tradeMeta.tradeDate) || existingMeta.tradeDate,
+          nextTradeDate: fmtDate(tradeMeta.nextDate) || existingMeta.nextTradeDate,
+          obsDate: fmtDate(tradeMeta.obsDate) || existingMeta.obsDate,
+        };
+        await this.storage.setItem(STORAGE_KEYS.META, newMeta);
       }
 
-      // 6. 還原 import_log
       const logSheet = getSheetFromPayload(payload, 'import_log');
       if (isValidSheetData(logSheet)) {
         const logs: ImportLog[] = logSheet.values.slice(1).map((row) => ({
@@ -416,14 +544,13 @@ class MockApiClientImpl implements ApiClient {
           status: String(row[1] ?? ''),
           message: String(row[2] ?? ''),
         }));
-        // 新增這次還原記錄
         const info = extractBackupInfo(payload);
         const newLog: ImportLog = {
           timestamp: new Date().toISOString(),
           status: '成功',
           message: `已從 JSON 還原整個資料庫｜來源系統=${info.sourceAppName}｜來源版本=${info.sourceAppVersion}｜schema=${info.schemaVersion}`,
         };
-        this.setStorageItem(STORAGE_KEYS.LOGS, [newLog, ...logs]);
+        await this.storage.setItem(STORAGE_KEYS.LOGS, [newLog, ...logs]);
       }
 
       return {
@@ -432,40 +559,50 @@ class MockApiClientImpl implements ApiClient {
       };
     } catch (e: any) {
       const logs = await this.getImportLogs();
-      this.setStorageItem(STORAGE_KEYS.LOGS, [
-        {
-          timestamp: new Date().toISOString(),
-          status: '失敗',
-          message: 'JSON 匯入失敗：' + e.toString(),
-        },
-        ...logs,
-      ]);
+      const errorLog: ImportLog = {
+        timestamp: new Date().toISOString(),
+        status: '失敗',
+        message: 'JSON 匯入失敗：' + e.toString(),
+      };
+      await this.storage.setItem(STORAGE_KEYS.LOGS, [errorLog, ...logs]);
       throw e;
     }
   }
 
-  // ── 備份匯出：打包成標準 BackupPayload 格式 ──
-
   async exportDatabaseBackup(): Promise<{ fileName: string; content: string }> {
-    const stocks = await this.getStocks();
+    const list = await this.getStocks();
+    const stocks: StockDetail[] = [];
+    for (const item of list) {
+      const d = await this.getStockById(item.id);
+      if (d) stocks.push(d);
+    }
+
     const settings = await this.getSettings();
     const meta = await this.getSystemMeta();
     const logs = await this.getImportLogs();
 
-    // stock_db → 二維陣列（含 header）
     const headers = _getDbHeadersMock();
-    const stockRows = stocks.map(d => stockRowToRow(stockDataToStockRow(d)));
+    const stockRows = stocks.map(d => stockRowToRow(flatDataToStockRow(toFlatStock(d))));
     const stockValues: unknown[][] = [headers, ...stockRows];
 
-    // settings → 二維陣列
-    const ts = rawMapToTradeSettings(settings as any);
+    const ts = rawMapToTradeSettings(toSystemSettings(settings));
     const settingsValues = tradeSettingsToSheetValues(ts);
 
-    // meta → 二維陣列
-    const tradeMeta = systemMetaToTradeMeta(meta);
+    const parse = (s: string): Date | string | null => {
+      if (!s) return null;
+      const match = s.match(/^(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})$/);
+      if (match) {
+        return new Date(parseInt(match[1], 10), parseInt(match[2], 10) - 1, parseInt(match[3], 10));
+      }
+      return s;
+    };
+    const tradeMeta: TradeMeta = {
+      tradeDate: parse(meta.tradeDate),
+      nextDate: parse(meta.nextTradeDate),
+      obsDate: parse(meta.obsDate),
+    };
     const metaValues = tradeMetaToMetaValues(tradeMeta);
 
-    // import_log → 二維陣列
     const logValues: unknown[][] = [
       ['時間戳', '狀態', '訊息'],
       ...logs.map(l => [l.timestamp, l.status, l.message]),
@@ -526,12 +663,168 @@ class MockApiClientImpl implements ApiClient {
   }
 
   async resetDatabase(): Promise<void> {
-    localStorage.removeItem(STORAGE_KEYS.STOCKS);
-    localStorage.removeItem(STORAGE_KEYS.SETTINGS);
-    localStorage.removeItem(STORAGE_KEYS.META);
-    localStorage.removeItem(STORAGE_KEYS.LOGS);
-    // ui_extensions 保留，不清除 tags/notes
+    await this.storage.removeItem(STORAGE_KEYS.STOCKS);
+    await this.storage.removeItem(STORAGE_KEYS.SETTINGS);
+    await this.storage.removeItem(STORAGE_KEYS.META);
+    await this.storage.removeItem(STORAGE_KEYS.LOGS);
   }
 }
 
-export const api = new MockApiClientImpl();
+// ─────────────────────────────────────────────
+// HttpApiClient 實作 (對接 GAS Web App API)
+// ─────────────────────────────────────────────
+export class HttpApiClient implements ApiClient {
+  constructor(public baseUrl: string) {}
+
+  private async fetchGas<T>(action: string): Promise<T> {
+    const url = `${this.baseUrl}${this.baseUrl.includes('?') ? '&' : '?'}action=${action}`;
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        redirect: 'follow',
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+      return await res.json() as T;
+    } catch (e: any) {
+      console.error(`Fetch GAS action=${action} failed:`, e);
+      throw new Error(`連線至 Google Sheets API 失敗: ${e.message}`);
+    }
+  }
+
+  async getStocks(): Promise<StockListItem[]> {
+    const data = await this.fetchGas<{ values: unknown[][] }>('getStocks');
+    if (!data || !data.values || data.values.length === 0) {
+      return [];
+    }
+
+    const stockRows: StockRow[] = sheetValuesToStockRows(data.values);
+    const storage = new BrowserStorageAdapter();
+    const ext = await storage.getItem<UiExtensions>(STORAGE_KEYS.EXTENSIONS, {});
+
+    return stockRows.map(row => {
+      const flat = stockRowToFlatData(row);
+      const details = toStockDetail(flat, ext[flat.id]);
+      const { notes: _n, takeProfit: _t, stopLoss: _s, supports: _su, pressures: _pr, ...item } = details;
+      return item as StockListItem;
+    });
+  }
+
+  async getStockById(id: string): Promise<StockDetail | null> {
+    const data = await this.fetchGas<{ values: unknown[][] }>('getStocks');
+    if (!data || !data.values || data.values.length === 0) {
+      return null;
+    }
+
+    const stockRows: StockRow[] = sheetValuesToStockRows(data.values);
+    const matchedRow = stockRows.find(row => row.stock.identity.id === id);
+    if (!matchedRow) return null;
+
+    const storage = new BrowserStorageAdapter();
+    const ext = await storage.getItem<UiExtensions>(STORAGE_KEYS.EXTENSIONS, {});
+    const flat = stockRowToFlatData(matchedRow);
+    return toStockDetail(flat, ext[flat.id]);
+  }
+
+  async getSystemMeta(): Promise<MetaInfo> {
+    const data = await this.fetchGas<{ values: unknown[][] }>('getMeta');
+    if (!data || !data.values || data.values.length === 0) {
+      throw new Error('無法取得系統中繼資料');
+    }
+    const tradeMeta: TradeMeta = metaValuesToTradeMeta(data.values);
+    const mockMeta = {
+      tradeDate: _fmtDate(tradeMeta.tradeDate) || '',
+      nextTradeDate: _fmtDate(tradeMeta.nextDate) || '',
+      obsDate: _fmtDate(tradeMeta.obsDate) || '',
+      appVersion: 'v4.5-gas-api',
+      lastUpdated: new Date().toISOString()
+    };
+    return toMetaInfo(mockMeta);
+  }
+
+  async getSettings(): Promise<AppSettings> {
+    const data = await this.fetchGas<{ values: unknown[][] }>('getSettings');
+    if (!data || !data.values || data.values.length === 0) {
+      throw new Error('無法取得系統參數設定');
+    }
+    const rawMap: Record<string, unknown> = {};
+    data.values.slice(1).forEach((row) => {
+      const key = String(row[0] ?? '').trim();
+      if (key) rawMap[key] = row[1];
+    });
+    const ts = rawMapToTradeSettings(rawMap as any);
+    const systemSettings = tradeSettingsToRawMap(ts);
+    return toAppSettings(systemSettings);
+  }
+
+  async getImportLogs(): Promise<ImportLog[]> {
+    const data = await this.fetchGas<{ values: unknown[][] }>('getImportLogs');
+    if (!data || !data.values || data.values.length === 0) {
+      return [];
+    }
+    return data.values.slice(1).map((row) => ({
+      timestamp: String(row[0] ?? ''),
+      status: String(row[1] ?? ''),
+      message: String(row[2] ?? ''),
+    }));
+  }
+
+  async updateStock(id: string, update: Partial<StockDetail>): Promise<StockDetail> {
+    // 唯讀 API 階段下，將 tags / notes 暫存於本地 extension，但 takeProfit, stopLoss 僅提供前端假更新
+    if ('tags' in update || 'notes' in update || 'takeProfit' in update || 'stopLoss' in update) {
+      const storage = new BrowserStorageAdapter();
+      const ext = await storage.getItem<UiExtensions>(STORAGE_KEYS.EXTENSIONS, {});
+      const originalExt = ext[id] || { tags: [], notes: '' };
+      ext[id] = {
+        tags: update.tags ?? originalExt.tags,
+        notes: update.notes ?? originalExt.notes,
+      };
+      await storage.setItem(STORAGE_KEYS.EXTENSIONS, ext);
+    }
+    
+    const detail = await this.getStockById(id);
+    if (!detail) throw new Error('讀取個股資料失敗');
+    return {
+      ...detail,
+      ...update
+    };
+  }
+
+  async updateSettings(_settings: AppSettings): Promise<AppSettings> {
+    throw new Error('目前 API 模式為唯讀。若要更新參數，請回到 Mock 模式或至 Google Sheets 試算表中修改。');
+  }
+
+  async importDatabaseBackup(_jsonContent: string): Promise<{ success: boolean; meta: any }> {
+    throw new Error('API 模式下不支援直接還原 JSON。請先在設定中切換回 Mock 模式再執行。');
+  }
+
+  async exportDatabaseBackup(): Promise<{ fileName: string; content: string }> {
+    throw new Error('API 模式下不支援直接匯出 JSON。請先在設定中切換回 Mock 模式再執行。');
+  }
+
+  async resetDatabase(): Promise<void> {
+    const storage = new BrowserStorageAdapter();
+    await storage.removeItem(STORAGE_KEYS.EXTENSIONS);
+  }
+
+  async importCsv(_csvContent: string): Promise<{ success: boolean; deletedIds: string[] }> {
+    throw new Error('API 模式下不支援前端直接匯入 CSV。請於 Google Sheets 端執行「手動匯入 CSV」。');
+  }
+}
+
+// ─────────────────────────────────────────────
+// API Provider 偵測與實體化
+// ─────────────────────────────────────────────
+function getActiveApiClient(): ApiClient {
+  const provider = localStorage.getItem('tradepilot_api_provider');
+  const apiUrl = localStorage.getItem('tradepilot_api_url');
+
+  if (provider === 'http' && apiUrl) {
+    return new HttpApiClient(apiUrl.trim());
+  }
+
+  return new MockApiClient(new BrowserStorageAdapter());
+}
+
+export const api = getActiveApiClient();

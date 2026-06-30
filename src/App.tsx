@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from './lib/api/client';
-import { StockData, SystemMeta } from './lib/types';
+import { StockListItem, MetaInfo } from './lib/types';
 import ThemeToggle from './components/ThemeToggle';
 import StockListPage from './pages/StockListPage';
 import StockDetailPage from './pages/StockDetailPage';
@@ -9,8 +9,8 @@ import { RefreshCw, BarChart2 } from 'lucide-react';
 export default function App() {
   const [currentPage, setCurrentPage] = useState<'list' | 'detail'>('list');
   const [selectedStockId, setSelectedStockId] = useState<string | null>(null);
-  const [stocks, setStocks] = useState<StockData[]>([]);
-  const [meta, setMeta] = useState<SystemMeta | null>(null);
+  const [stocks, setStocks] = useState<StockListItem[]>([]);
+  const [meta, setMeta] = useState<MetaInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadData = async () => {
