@@ -4,7 +4,10 @@
 
 ## 目前目標
 
-以 `client.ts` 為中心的前端資料層已收斂，使用 `localStorage` 作為 mock state，備份匯出/匯入端點與正式 `BackupPayload` 契約完全對齊。下一步為 Cloudflare Pages 部署驗證，以及未來有需要時再接 GAS Web App API。
+已完成 **Phase A：手動同步流程正式化**。以 `client.ts` 為中心的前端資料層已收斂，使用 `localStorage` 作為前端 Mock 狀態，資料備份匯入/匯出與正式的 `BackupPayload` JSON 契約完全對齊。目前系統定位：
+- **Phase A 正式流程**：Google Sheets 匯入 CSV 並計算 ➔ 匯出 JSON 備份 ➔ 前端匯入 JSON 進行同步。
+- **邊界界定**：CSV 前端匯入目前是**設計保留行為（僅紀錄日誌，非 Bug）**，核心解析與指標運算仍留存於 Google Sheets 中。
+- **未來展望**：未來 **Phase B** 才會評估升級為 GAS Web App API 以進行即時讀寫同步。
 
 ## 已確認的核心檔案
 
@@ -73,10 +76,12 @@
 | `importCsv()` | 不更新（前端限制） | 不動 |
 | `resetDatabase()` | 清除 | **不清除**（保留使用者筆記） |
 
-#### CSV 匯入說明（目前保留項，非未完成核心功能）
+#### CSV 匯入說明（Phase A 正式手動流程邊界）
 
-前端純 Mock 模式下，CSV 欄位解析與資料更新被明確規劃為**目前保留項（設計保留行為）**。由於真正的 CSV 欄位解析與運算需依賴 Google Sheets 的 Apps Script（`Utilities.parseCsv` 及 Sheets API 進行排程計算），因此前端在接收 CSV 檔案後，設計為**僅記錄一筆「待處理」日誌，而不直接更新前端本地股票資料**。此設計並非未完成核心功能，而是為了維持資料一致性與運算邊界。
-如需執行真正的資料同步，請直接至 Google Sheets 介面使用「手動匯入 CSV」選單執行 Apps Script。
+在 Phase A 架構中，**前端 CSV 檔案解析與更新已被明確定位為設計保留行為（非系統 Bug）**。
+- **原因**：真正的 CSV 解析與複雜的技術指標（如支撐壓力線、均線交叉判定、買賣訊號狀態）依賴 Google Sheets Apps Script 的 `Utilities.parseCsv` 與 Sheets API，前端不重複實作此運算核心。
+- **前端行為**：前端接收 CSV 僅會記錄一筆狀態為「待處理」的日誌，不會修改前端的股票資料。
+- **正式路徑**：使用者必須依照 SOP，在 Google Sheets 端執行「手動匯入 CSV」，再導出最新 JSON 備份，並於前端上傳該 JSON 來更新資料。
 
 #### BackupPayload 相容性
 

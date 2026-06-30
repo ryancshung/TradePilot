@@ -134,13 +134,13 @@ export default function ImportExportDrawer({ isOpen, onClose, onSuccess }: Impor
             onClick={() => setActiveTab('sync')}
             className={`flex-1 pb-3 text-center transition-colors ${activeTab === 'sync' ? 'border-b-2 border-brand-500 text-brand-500' : 'text-slate-500 dark:text-slate-400'}`}
           >
-            手動同步 CSV
+            CSV 同步說明
           </button>
           <button
             onClick={() => setActiveTab('backup')}
             className={`flex-1 pb-3 text-center transition-colors ${activeTab === 'backup' ? 'border-b-2 border-brand-500 text-brand-500' : 'text-slate-500 dark:text-slate-400'}`}
           >
-            JSON 備份/還原
+            JSON 同步與備份
           </button>
           <button
             onClick={() => setActiveTab('logs')}
@@ -153,23 +153,33 @@ export default function ImportExportDrawer({ isOpen, onClose, onSuccess }: Impor
         {/* 內容 */}
         <div className="flex-1 overflow-y-auto py-2">
           {activeTab === 'sync' && (
-            <div className="space-y-6">
+            <div className="space-y-4">
+              <div className="text-xs text-amber-600 bg-amber-500/10 p-4 rounded-xl border border-amber-500/20 space-y-2 leading-relaxed">
+                <p className="font-bold text-sm flex items-center gap-1">⚠️ 重要邊界限制 (Phase A 流程)</p>
+                <p>
+                  本系統的 <strong>CSV 檔案解析與指標運算</strong> 高度依賴 Google Sheets (Apps Script) 的運算引擎。
+                </p>
+                <p className="font-semibold text-slate-800 dark:text-slate-200">
+                  前端在此處「選擇 CSV」僅會產生一筆「待處理」系統日誌以供備查，不會實際更新前端股票資料。
+                </p>
+              </div>
+
               <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200/50 dark:border-slate-800/50">
                 <h3 className="text-sm font-bold mb-2 text-slate-800 dark:text-slate-200">
-                  📥 從個股系統 CSV 同步
+                  📥 模擬接收個股 CSV
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
-                  匯入每日產出的 Big5 編碼股票資料 CSV。系統將會比對股票代號，更新前日與今日收盤、最高、最低、均線等數據，並自動更新「觀察日」與重新判定買賣訊號狀態。
+                  僅用於記錄日誌。如需真正執行數據同步，請至 <strong>Google Sheets 介面</strong> 使用「手動匯入 CSV」選單執行運算。
                 </p>
 
                 <div className="flex items-center justify-center w-full">
                   <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-brand-500 dark:hover:border-brand-500 rounded-xl cursor-pointer bg-white dark:bg-slate-900 transition-colors">
                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                       <Upload className="w-8 h-8 text-slate-400 mb-2" />
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
-                        {isProcessing ? '正在同步中...' : '選擇個股 CSV 檔案開始同步'}
+                      <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold px-4 text-center">
+                        {isProcessing ? '正在同步中...' : '選擇個股 CSV 檔案 (僅供紀錄日誌)'}
                       </p>
-                      <p className="text-[10px] text-slate-400">大宗 CSV (Big5 / UTF-8)</p>
+                      <p className="text-[10px] text-slate-400 mt-1">此操作不會更新前端股票資料</p>
                     </div>
                     <input
                       type="file"
@@ -181,23 +191,26 @@ export default function ImportExportDrawer({ isOpen, onClose, onSuccess }: Impor
                   </label>
                 </div>
               </div>
-
-              <div className="text-xs text-amber-500 bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
-                ⚠️ 注意：前端 Mock 模式無法執行 CSV 欄位解析（需要 GAS 的 Utilities.parseCsv 及 Sheets API）。選擇 CSV 後系統會記錄一筆操作日誌，但不會更新股票資料。如需真正同步，請至 Google Sheets 使用「手動匯入 CSV」選單。
-              </div>
             </div>
           )}
 
           {activeTab === 'backup' && (
-            <div className="space-y-6">
+            <div className="space-y-4">
+              <div className="text-xs text-blue-600 bg-blue-500/10 p-4 rounded-xl border border-blue-500/20 space-y-1 leading-relaxed">
+                <p className="font-bold text-sm">💡 數據同步指引</p>
+                <p>
+                  請先在 <strong>Google Sheets 匯入 CSV</strong> 並完成 Apps Script 運算，接著透過試算表工具 <strong>下載/導出 JSON 備份檔</strong>，最後在下方點擊 <strong>「還原系統資料庫」</strong> 匯入此 JSON 檔案。這是將 Sheets 最新數據同步至前端的唯一正式路徑。
+                </p>
+              </div>
+
               <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200/50 dark:border-slate-800/50 space-y-4">
                 <div>
                   <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                     <Download className="w-4 h-4 text-brand-500" />
-                    備份系統整個資料庫
+                    備份前端資料庫 (JSON)
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                    將 stock_db、參數設定、觀察日中繼資料及系統日誌打包下載成單一 JSON 備份檔。
+                    將目前網頁中的 stock_db、參數設定、觀察日中繼資料及系統日誌打包下載成單一 JSON 備份檔。
                   </p>
                   <button
                     onClick={handleExportJson}
@@ -211,14 +224,14 @@ export default function ImportExportDrawer({ isOpen, onClose, onSuccess }: Impor
                 <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
                   <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                     <Upload className="w-4 h-4 text-brand-500" />
-                    還原系統資料庫
+                    還原系統資料庫 (JSON 數據同步)
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                    選擇先前匯出的 JSON 檔案。匯入後將覆蓋您目前所有的資料庫設定。
+                    選擇先前從 Google Sheets 導出（或前端備份）的 JSON 檔案。匯入後將覆蓋您目前前端所有的資料庫與參數設定。
                   </p>
                   <label className="mt-3 w-full border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-950 rounded-lg p-2.5 text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-center gap-1.5 transition-colors cursor-pointer text-center">
                     <FileText className="w-4 h-4 text-slate-400" />
-                    {isProcessing ? '正在還原中...' : '選擇 JSON 備份檔匯入還原'}
+                    {isProcessing ? '正在還原中...' : '選擇 JSON 檔案匯入還原 (數據同步)'}
                     <input
                       type="file"
                       accept=".json"
